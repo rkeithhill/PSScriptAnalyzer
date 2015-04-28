@@ -68,6 +68,17 @@ namespace Microsoft.Windows.Powershell.ScriptAnalyzer.Commands
         }
         private string[] severity;
 
+        /// <summary>
+        /// RootModuleFolder: Apply to all modules within a folder. Used together with CustomizedRulePath
+        /// </summary>
+        [Parameter(Mandatory = false)]
+        public SwitchParameter RootModuleFolder
+        {
+            get { return rootModuleFolder; }
+            set { rootModuleFolder = value; }
+        }
+        private bool rootModuleFolder;
+
         #endregion Parameters
 
         #region Private Members
@@ -91,7 +102,7 @@ namespace Microsoft.Windows.Powershell.ScriptAnalyzer.Commands
             // Verifies rule extensions
             if (customizedRulePath != null)
             {
-                validationResults = ScriptAnalyzer.Instance.CheckRuleExtension(customizedRulePath, this);
+                validationResults = ScriptAnalyzer.Instance.CheckRuleExtension(customizedRulePath, RootModuleFolder, this);
                 foreach (string extension in validationResults["InvalidPaths"])
                 {
                     WriteWarning(string.Format(CultureInfo.CurrentCulture,Strings.MissingRuleExtension, extension));
@@ -112,7 +123,7 @@ namespace Microsoft.Windows.Powershell.ScriptAnalyzer.Commands
                 }
                 else
                 {
-                    ScriptAnalyzer.Instance.Initilaize(validationResults);
+                    ScriptAnalyzer.Instance.Initialize(validationResults);
                 }
             }
             catch (Exception ex)

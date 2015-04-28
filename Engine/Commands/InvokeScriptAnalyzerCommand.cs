@@ -104,7 +104,6 @@ namespace Microsoft.Windows.Powershell.ScriptAnalyzer.Commands
         /// Recurse: Apply to all files within subfolders under the path
         /// </summary>
         [Parameter(Mandatory = false)]
-        [SuppressMessage("Microsoft.Performance", "CA1819:PropertiesShouldNotReturnArrays")]
         public SwitchParameter Recurse
         {
             get { return recurse; }
@@ -116,13 +115,23 @@ namespace Microsoft.Windows.Powershell.ScriptAnalyzer.Commands
         /// ShowSuppressed: Show the suppressed message
         /// </summary>
         [Parameter(Mandatory = false)]
-        [SuppressMessage("Microsoft.Performance", "CA1819:PropertiesShouldNotReturnArrays")]
         public SwitchParameter SuppressedOnly
         {
             get { return suppressedOnly; }
             set { suppressedOnly = value; }
         }
         private bool suppressedOnly;
+
+        /// <summary>
+        /// RootModuleFolder: Apply to all modules within a folder. Used together with CustomizedRulePath
+        /// </summary>
+        [Parameter(Mandatory = false)]
+        public SwitchParameter RootModuleFolder
+        {
+            get { return rootModuleFolder; }
+            set { rootModuleFolder = value; }
+        }
+        private bool rootModuleFolder;
 
         #endregion Parameters
 
@@ -155,7 +164,7 @@ namespace Microsoft.Windows.Powershell.ScriptAnalyzer.Commands
 
             if (paths.Count > 0)
             {
-                validationResults = ScriptAnalyzer.Instance.CheckRuleExtension(paths.ToArray(), this);
+                validationResults = ScriptAnalyzer.Instance.CheckRuleExtension(paths.ToArray(), rootModuleFolder, this);
                 foreach (string extension in validationResults["InvalidPaths"])
                 {
                     WriteWarning(string.Format(CultureInfo.CurrentCulture, Strings.MissingRuleExtension, extension));
@@ -181,7 +190,7 @@ namespace Microsoft.Windows.Powershell.ScriptAnalyzer.Commands
                 }
                 else
                 {
-                    ScriptAnalyzer.Instance.Initilaize(validationResults);
+                    ScriptAnalyzer.Instance.Initialize(validationResults);
                 }
             }
             catch (Exception ex)

@@ -120,7 +120,7 @@ namespace Microsoft.Windows.Powershell.ScriptAnalyzer
         /// Initilaize : Initializes default rules, external rules and loggers.
         /// </summary>
         /// <param name="result">Path validation result.</param>
-        public void Initilaize(Dictionary<string, List<string>> result)
+        public void Initialize(Dictionary<string, List<string>> result)
         {
             List<string> paths = new List<string>();
 
@@ -401,7 +401,7 @@ namespace Microsoft.Windows.Powershell.ScriptAnalyzer
             }
         }
 
-        public Dictionary<string, List<string>> CheckRuleExtension(string[] path, PSCmdlet cmdlet)
+        public Dictionary<string, List<string>> CheckRuleExtension(string[] paths, bool rootModuleFolder, PSCmdlet cmdlet)
         {
             Dictionary<string, List<string>> results = new Dictionary<string, List<string>>();
 
@@ -409,8 +409,30 @@ namespace Microsoft.Windows.Powershell.ScriptAnalyzer
             List<string> validDllPaths = new List<string>();
             List<string> validModPaths = new List<string>();
 
+            List<string> modulePaths = new List<string>();
+            if (rootModuleFolder)
+            {
+                foreach (string path in paths)
+                {
+                    string rPath = cmdlet.SessionState.Path.GetResolvedPSPathFromPSPath(path).First().ToString();
+
+                    if (!Directory.Exists(rPath))
+                    {
+                        invalidPaths.Add(rPath);
+                    }
+                    else
+                    {
+                        modulePaths.AddRange(Directory.GetDirectories(rPath));
+                    }
+                }
+            }
+            else
+            {
+                modulePaths.AddRange(paths);
+            }
+
             // Gets valid module names
-            foreach (string childPath in path)
+            foreach (string childPath in modulePaths)
             {
                 try
                 {
@@ -458,7 +480,7 @@ namespace Microsoft.Windows.Powershell.ScriptAnalyzer
             }
 
             // Gets valid dll paths
-            foreach (string childPath in path.Except<string>(validModPaths))
+            foreach (string childPath in modulePaths.Except<string>(validModPaths))
             {
                 try
                 {
