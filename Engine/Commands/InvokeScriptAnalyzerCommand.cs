@@ -112,6 +112,18 @@ namespace Microsoft.Windows.PowerShell.ScriptAnalyzer.Commands
         private bool recurse;
 
         /// <summary>
+        /// Returns path to the file that contains user profile for ScriptAnalyzer
+        /// </summary>
+        [Parameter(Mandatory = false)]
+        [ValidateNotNull]
+        public string Profile
+        {
+            get { return _profile; }
+            set { _profile = value; }
+        }
+        private string _profile;
+
+        /// <summary>
         /// ShowSuppressed: Show the suppressed message
         /// </summary>
         [Parameter(Mandatory = false)]
@@ -271,13 +283,6 @@ namespace Microsoft.Windows.PowerShell.ScriptAnalyzer.Commands
 
         }
 
-        ConcurrentBag<DiagnosticRecord> diagnostics;
-        ConcurrentBag<SuppressedRecord> suppressed;
-        Dictionary<string, List<RuleSuppression>> ruleSuppressions;
-        List<Regex> includeRegexList;
-        List<Regex> excludeRegexList;
-        ConcurrentDictionary<string, List<object>> ruleDictionary;
-
         /// <summary>
         /// Analyzes a single script file.
         /// </summary>
@@ -293,9 +298,65 @@ namespace Microsoft.Windows.PowerShell.ScriptAnalyzer.Commands
             // Use a List of KVP rather than dictionary, since for a script containing inline functions with same signature, keys clash
             List<KeyValuePair<CommandInfo, IScriptExtent>> cmdInfoTable = new List<KeyValuePair<CommandInfo, IScriptExtent>>();
 
+            if (!String.IsNullOrWhiteSpace(Profile))
+            {
+                try
+                {
+                    Profile = this.SessionState.Path.GetResolvedPSPathFromPSPath(Profile).First().Path;
+                }
+                catch
+                {
+                    WriteError(new ErrorRecord(new FileNotFoundException(),
+                        string.Format(CultureInfo.CurrentCulture, Strings.FileNotFound, Profile),
+                        ErrorCategory.InvalidArgument, this));
+                }
+
+                if (File.Exists(Profile))
+                {
+                    Token[] parserTokens = null;
+                    ParseError[] parserErrors = null;
+                    Ast profileAst = Parser.ParseFile(Profile, out parserTokens, out parserErrors);
+                    IEnumerable<Ast> hashTableAsts = profileAst.FindAll(item => item is HashtableAst, false);
+                    foreach (HashtableAst hashTableAst in hashTableAsts)
+                    {
+                        foreach (var kvp in hashTableAst.KeyValuePairs)
+                        {
+                            if (!(kvp.Item1 is StringConstantExpressionAst))
+                            {
+                                // Write some error here
+                                continue;
+                            }
+
+                            switch ((kvp.Item1 as StringConstantExpressionAst).Value.ToLower())
+                            {
+                                case "includerules":
+                                    // parse the item2 as array
+                                    break;
+                                case "excluderules":
+                                    // parse the item2 as array
+                                    PipelineAst pipeAst = kvp.Item2 as PipelineAst;
+                                    if (pipeAst != null)
+                                    {
+                                        ExpressionAst pureExp = pipeAst.GetPureExpression();
+                                        if (pureExp is ArrayExpressionAst)
+                                        {
+                                            ArrayExpressionAst arrayExp = pureExp as ArrayExpressionAst;
+
+                                        }
+                                    }
+                                    break;
+                                default:
+                                    // Write some error here
+                                    break;
+                            }
+                        }
+                    }
+                }
+            }
+
             //Check wild card input for the Include/ExcludeRules and create regex match patterns
-            includeRegexList = new List<Regex>();
-            excludeRegexList = new List<Regex>();
+            List<Regex> includeRegexList = new List<Regex>();
+            List<Regex> excludeRegexList = new List<Regex>();
             if (includeRule != null)
             {
                 foreach (string rule in includeRule)
@@ -343,7 +404,7 @@ namespace Microsoft.Windows.PowerShell.ScriptAnalyzer.Commands
                 return;
             }
 
-            ruleSuppressions = Helper.Instance.GetRuleSuppression(ast);
+            Dictionary<string, List<RuleSuppression>> ruleSuppressions = Helper.Instance.GetRuleSuppression(ast);
 
             foreach (List<RuleSuppression> ruleSuppressionsList in ruleSuppressions.Values)
             {
