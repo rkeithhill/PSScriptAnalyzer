@@ -330,20 +330,92 @@ namespace Microsoft.Windows.PowerShell.ScriptAnalyzer.Commands
                             switch ((kvp.Item1 as StringConstantExpressionAst).Value.ToLower())
                             {
                                 case "includerules":
-                                    // parse the item2 as array
-                                    break;
+                                    // falls through
                                 case "excluderules":
                                     // parse the item2 as array
                                     PipelineAst pipeAst = kvp.Item2 as PipelineAst;
+                                    List<string> excludeOrIncludeList = new List<string>();
                                     if (pipeAst != null)
                                     {
                                         ExpressionAst pureExp = pipeAst.GetPureExpression();
-                                        if (pureExp is ArrayExpressionAst)
+                                        if (pureExp is StringConstantExpressionAst)
                                         {
-                                            ArrayExpressionAst arrayExp = pureExp as ArrayExpressionAst;
+                                            excludeOrIncludeList.Add((pureExp as StringConstantExpressionAst).Value);
+                                        }
+                                        else
+                                        {
+                                            ArrayLiteralAst arrayLitAst = pureExp as ArrayLiteralAst;
+                                            if (arrayLitAst == null && pureExp is ArrayExpressionAst)
+                                            {
+                                                ArrayExpressionAst arrayExp = pureExp as ArrayExpressionAst;
+                                                // Statements property is never null
+                                                if (arrayExp.SubExpression != null)
+                                                {
+                                                    StatementAst stateAst = arrayExp.SubExpression.Statements.First();
+                                                    if (stateAst != null && stateAst is PipelineAst)
+                                                    {
+                                                        CommandBaseAst cmdBaseAst = (stateAst as PipelineAst).PipelineElements.First();
+                                                        if (cmdBaseAst != null && cmdBaseAst is CommandExpressionAst)
+                                                        {
+                                                            CommandExpressionAst cmdExpAst = cmdBaseAst as CommandExpressionAst;
+                                                            if (cmdExpAst.Expression is StringConstantExpressionAst)
+                                                            {
+                                                                excludeOrIncludeList.Add((cmdExpAst.Expression as StringConstantExpressionAst).Value);
+                                                            }
+                                                            else
+                                                            {
+                                                                arrayLitAst = cmdExpAst.Expression as ArrayLiteralAst;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
 
+                                            if (arrayLitAst != null)
+                                            {
+                                                foreach (var element in arrayLitAst.Elements)
+                                                {
+                                                    if (!(element is StringConstantExpressionAst))
+                                                    {
+                                                        // write error here
+                                                        continue;
+                                                    }
+
+                                                    excludeOrIncludeList.Add((element as StringConstantExpressionAst).Value);
+                                                }
+                                            }
                                         }
                                     }
+
+                                    if (excludeOrIncludeList.Count == 0)
+                                    {
+                                        // write error here
+                                        break;
+                                    }
+
+                                    if (String.Equals((kvp.Item1 as StringConstantExpressionAst).Value, "excluderules", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        if (excludeRule == null)
+                                        {
+                                            excludeRule = excludeOrIncludeList.ToArray();
+                                        }
+                                        else
+                                        {
+                                            excludeRule = excludeRule.Union(excludeOrIncludeList).ToArray();
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (includeRule == null)
+                                        {
+                                            includeRule = excludeOrIncludeList.ToArray();
+                                        }
+                                        else
+                                        {
+                                            includeRule = includeRule.Union(excludeOrIncludeList).ToArray();
+                                        }
+                                    }
+
                                     break;
                                 default:
                                     // Write some error here
