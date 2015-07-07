@@ -327,95 +327,98 @@ namespace Microsoft.Windows.PowerShell.ScriptAnalyzer.Commands
                                 continue;
                             }
 
+                            // parse the item2 as array
+                            PipelineAst pipeAst = kvp.Item2 as PipelineAst;
+                            List<string> rhsList = new List<string>();
+                            if (pipeAst != null)
+                            {
+                                ExpressionAst pureExp = pipeAst.GetPureExpression();
+                                if (pureExp is StringConstantExpressionAst)
+                                {
+                                    rhsList.Add((pureExp as StringConstantExpressionAst).Value);
+                                }
+                                else
+                                {
+                                    ArrayLiteralAst arrayLitAst = pureExp as ArrayLiteralAst;
+                                    if (arrayLitAst == null && pureExp is ArrayExpressionAst)
+                                    {
+                                        ArrayExpressionAst arrayExp = pureExp as ArrayExpressionAst;
+                                        // Statements property is never null
+                                        if (arrayExp.SubExpression != null)
+                                        {
+                                            StatementAst stateAst = arrayExp.SubExpression.Statements.First();
+                                            if (stateAst != null && stateAst is PipelineAst)
+                                            {
+                                                CommandBaseAst cmdBaseAst = (stateAst as PipelineAst).PipelineElements.First();
+                                                if (cmdBaseAst != null && cmdBaseAst is CommandExpressionAst)
+                                                {
+                                                    CommandExpressionAst cmdExpAst = cmdBaseAst as CommandExpressionAst;
+                                                    if (cmdExpAst.Expression is StringConstantExpressionAst)
+                                                    {
+                                                        rhsList.Add((cmdExpAst.Expression as StringConstantExpressionAst).Value);
+                                                    }
+                                                    else
+                                                    {
+                                                        arrayLitAst = cmdExpAst.Expression as ArrayLiteralAst;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (arrayLitAst != null)
+                                    {
+                                        foreach (var element in arrayLitAst.Elements)
+                                        {
+                                            if (!(element is StringConstantExpressionAst))
+                                            {
+                                                // write error here
+                                                continue;
+                                            }
+
+                                            rhsList.Add((element as StringConstantExpressionAst).Value);
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (rhsList.Count == 0)
+                            {
+                                // write error here
+                                break;
+                            }
+
                             switch ((kvp.Item1 as StringConstantExpressionAst).Value.ToLower())
                             {
-                                case "includerules":
-                                    // falls through
-                                case "excluderules":
-                                    // parse the item2 as array
-                                    PipelineAst pipeAst = kvp.Item2 as PipelineAst;
-                                    List<string> excludeOrIncludeList = new List<string>();
-                                    if (pipeAst != null)
+                                case "severity":
+                                    if (severity == null)
                                     {
-                                        ExpressionAst pureExp = pipeAst.GetPureExpression();
-                                        if (pureExp is StringConstantExpressionAst)
-                                        {
-                                            excludeOrIncludeList.Add((pureExp as StringConstantExpressionAst).Value);
-                                        }
-                                        else
-                                        {
-                                            ArrayLiteralAst arrayLitAst = pureExp as ArrayLiteralAst;
-                                            if (arrayLitAst == null && pureExp is ArrayExpressionAst)
-                                            {
-                                                ArrayExpressionAst arrayExp = pureExp as ArrayExpressionAst;
-                                                // Statements property is never null
-                                                if (arrayExp.SubExpression != null)
-                                                {
-                                                    StatementAst stateAst = arrayExp.SubExpression.Statements.First();
-                                                    if (stateAst != null && stateAst is PipelineAst)
-                                                    {
-                                                        CommandBaseAst cmdBaseAst = (stateAst as PipelineAst).PipelineElements.First();
-                                                        if (cmdBaseAst != null && cmdBaseAst is CommandExpressionAst)
-                                                        {
-                                                            CommandExpressionAst cmdExpAst = cmdBaseAst as CommandExpressionAst;
-                                                            if (cmdExpAst.Expression is StringConstantExpressionAst)
-                                                            {
-                                                                excludeOrIncludeList.Add((cmdExpAst.Expression as StringConstantExpressionAst).Value);
-                                                            }
-                                                            else
-                                                            {
-                                                                arrayLitAst = cmdExpAst.Expression as ArrayLiteralAst;
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-
-                                            if (arrayLitAst != null)
-                                            {
-                                                foreach (var element in arrayLitAst.Elements)
-                                                {
-                                                    if (!(element is StringConstantExpressionAst))
-                                                    {
-                                                        // write error here
-                                                        continue;
-                                                    }
-
-                                                    excludeOrIncludeList.Add((element as StringConstantExpressionAst).Value);
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    if (excludeOrIncludeList.Count == 0)
-                                    {
-                                        // write error here
-                                        break;
-                                    }
-
-                                    if (String.Equals((kvp.Item1 as StringConstantExpressionAst).Value, "excluderules", StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        if (excludeRule == null)
-                                        {
-                                            excludeRule = excludeOrIncludeList.ToArray();
-                                        }
-                                        else
-                                        {
-                                            excludeRule = excludeRule.Union(excludeOrIncludeList).ToArray();
-                                        }
+                                        severity = rhsList.ToArray();
                                     }
                                     else
                                     {
-                                        if (includeRule == null)
-                                        {
-                                            includeRule = excludeOrIncludeList.ToArray();
-                                        }
-                                        else
-                                        {
-                                            includeRule = includeRule.Union(excludeOrIncludeList).ToArray();
-                                        }
+                                        severity = severity.Union(rhsList).ToArray();
                                     }
-
+                                    break;
+                                case "includerules":
+                                    if (includeRule == null)
+                                    {
+                                        includeRule = rhsList.ToArray();
+                                    }
+                                    else
+                                    {
+                                        includeRule = includeRule.Union(rhsList).ToArray();
+                                    }
+                                    break;
+                                case "excluderules":
+                                    if (excludeRule == null)
+                                    {
+                                        excludeRule = rhsList.ToArray();
+                                    }
+                                    else
+                                    {
+                                        excludeRule = excludeRule.Union(rhsList).ToArray();
+                                    }
                                     break;
                                 default:
                                     // Write some error here
